@@ -1,6 +1,6 @@
 {
  "meta": {
-  "generatedAt": "2026-10-16 13:55 KST",
+  "generatedAt": "2026-10-16 17:52 KST",
   "confirmedMonth": "2026-08",
   "provisionalMonth": "2026-09",
   "window": [
@@ -9,11 +9,13 @@
   ],
   "peaksSince": "2020-01",
   "peaksThrough": "2025-07",
-  "calls": 1223,
+  "calls": 4390,
   "errors": [],
   "errorCount": 0,
   "rentStatus": "ok",
-  "notes": [],
+  "notes": [
+   "단지 식별 방식 변경으로 신고가 이력을 2020-01부터 다시 채움"
+  ],
   "discovered": {
    "4159": {
     "checked": "202608",
@@ -297,7 +299,11 @@
    },
    "name": "성남 수정·중원",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 5.51,
+   "trade3mUnits": 184,
+   "tradeTrend": 16.67,
+   "tradeTrendUnits": 199
   },
   "seongnam-bundang": {
    "confirmed": 158,
@@ -326,7 +332,11 @@
    },
    "name": "성남 분당",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 4.26,
+   "trade3mUnits": 301,
+   "tradeTrend": 13.53,
+   "tradeTrendUnits": 402
   },
   "anyang-dongan": {
    "confirmed": 363,
@@ -355,7 +365,11 @@
    },
    "name": "안양 동안",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 5.52,
+   "trade3mUnits": 278,
+   "tradeTrend": 14.4,
+   "tradeTrendUnits": 290
   },
   "suwon-jangan-paldal-yeongtong": {
    "confirmed": 774,
@@ -384,7 +398,11 @@
    },
    "name": "수원 장안·팔달·영통",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 5.73,
+   "trade3mUnits": 612,
+   "tradeTrend": 8.77,
+   "tradeTrendUnits": 663
   },
   "uiwang": {
    "confirmed": 148,
@@ -413,7 +431,11 @@
    },
    "name": "의왕",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 5.36,
+   "trade3mUnits": 138,
+   "tradeTrend": 7.97,
+   "tradeTrendUnits": 135
   },
   "gwangmyeong": {
    "confirmed": 177,
@@ -442,7 +464,11 @@
    },
    "name": "광명",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 6.54,
+   "trade3mUnits": 201,
+   "tradeTrend": 16.26,
+   "tradeTrendUnits": 226
   },
   "guri": {
    "confirmed": 94,
@@ -471,7 +497,11 @@
    },
    "name": "구리",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 5.83,
+   "trade3mUnits": 167,
+   "tradeTrend": 12.61,
+   "tradeTrendUnits": 185
   },
   "hanam": {
    "confirmed": 238,
@@ -500,7 +530,11 @@
    },
    "name": "하남",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 4.05,
+   "trade3mUnits": 214,
+   "tradeTrend": 15.77,
+   "tradeTrendUnits": 246
   },
   "yongin-suji": {
    "confirmed": 377,
@@ -529,7 +563,11 @@
    },
    "name": "용인 수지",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 5.86,
+   "trade3mUnits": 383,
+   "tradeTrend": 15.62,
+   "tradeTrendUnits": 419
   },
   "yongin-giheung": {
    "confirmed": 254,
@@ -558,7 +596,11 @@
    },
    "name": "용인 기흥",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 3.66,
+   "trade3mUnits": 419,
+   "tradeTrend": 7.82,
+   "tradeTrendUnits": 454
   },
   "hwaseong-dongtan": {
    "confirmed": 139,
@@ -605,7 +647,11 @@
    "reorgBreak": false,
    "name": "화성 동탄구",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 10.22,
+   "trade3mUnits": 446,
+   "tradeTrend": 16.07,
+   "tradeTrendUnits": 450
   },
   "gwacheon": {
    "confirmed": 17,
@@ -634,7 +680,11 @@
    },
    "name": "과천",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 4.91,
+   "trade3mUnits": 19,
+   "tradeTrend": 1.77,
+   "tradeTrendUnits": 25
   },
   "seoul-oegwak": {
    "confirmed": 1315,
@@ -663,7 +713,11 @@
    },
    "name": "서울 외곽 (노원·도봉·강북·중랑·금천·구로)",
    "kind": "regulated",
-   "target": true
+   "target": true,
+   "trade3m": 5.26,
+   "trade3mUnits": 1239,
+   "tradeTrend": 9.21,
+   "tradeTrendUnits": 1275
   },
   "suwon-gwonseon": {
    "confirmed": 466,
@@ -692,7 +746,11 @@
    },
    "name": "수원 권선",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 2.9,
+   "trade3mUnits": 294,
+   "tradeTrend": 4.88,
+   "tradeTrendUnits": 323
   },
   "hwaseong-byeongjeom": {
    "confirmed": 261,
@@ -739,7 +797,11 @@
    "reorgBreak": false,
    "name": "화성 병점",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 3.98,
+   "trade3mUnits": 163,
+   "tradeTrend": 5.41,
+   "tradeTrendUnits": 175
   },
   "gunpo": {
    "confirmed": 403,
@@ -768,7 +830,11 @@
    },
    "name": "군포",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 3.3,
+   "trade3mUnits": 212,
+   "tradeTrend": 5.21,
+   "tradeTrendUnits": 227
   },
   "anyang-manan": {
    "confirmed": 225,
@@ -797,7 +863,11 @@
    },
    "name": "안양 만안",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 4.73,
+   "trade3mUnits": 169,
+   "tradeTrend": 6.56,
+   "tradeTrendUnits": 205
   },
   "bucheon-wonmi": {
    "confirmed": 460,
@@ -826,7 +896,11 @@
    },
    "name": "부천 원미",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 3.0,
+   "trade3mUnits": 265,
+   "tradeTrend": 3.34,
+   "tradeTrendUnits": 282
   },
   "bucheon-ojeong": {
    "confirmed": 39,
@@ -855,7 +929,11 @@
    },
    "name": "부천 오정",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 0.84,
+   "trade3mUnits": 33,
+   "tradeTrend": -0.49,
+   "tradeTrendUnits": 42
   },
   "incheon-yeonsu-bupyeong": {
    "confirmed": 759,
@@ -884,7 +962,11 @@
    },
    "name": "인천 연수·부평",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 1.52,
+   "trade3mUnits": 619,
+   "tradeTrend": 1.76,
+   "tradeTrendUnits": 710
   },
   "incheon-gyeyang": {
    "confirmed": 191,
@@ -913,7 +995,11 @@
    },
    "name": "인천 계양",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 0.6,
+   "trade3mUnits": 175,
+   "tradeTrend": 0.53,
+   "tradeTrendUnits": 206
   },
   "incheon-michuhol": {
    "confirmed": 221,
@@ -942,7 +1028,11 @@
    },
    "name": "인천 미추홀",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 0.24,
+   "trade3mUnits": 187,
+   "tradeTrend": 0.11,
+   "tradeTrendUnits": 214
   },
   "namyangju": {
    "confirmed": 801,
@@ -971,7 +1061,11 @@
    },
    "name": "남양주",
    "kind": "unregulated",
-   "target": true
+   "target": true,
+   "trade3m": 2.59,
+   "trade3mUnits": 558,
+   "tradeTrend": 3.57,
+   "tradeTrendUnits": 615
   },
   "gimpo": {
    "confirmed": 362,
@@ -1000,7 +1094,11 @@
    },
    "name": "김포",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 0.05,
+   "trade3mUnits": 330,
+   "tradeTrend": -0.25,
+   "tradeTrendUnits": 352
   },
   "goyang-deogyang": {
    "confirmed": 441,
@@ -1029,7 +1127,11 @@
    },
    "name": "고양 덕양",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 2.27,
+   "trade3mUnits": 295,
+   "tradeTrend": 2.38,
+   "tradeTrendUnits": 330
   },
   "paju": {
    "confirmed": 340,
@@ -1058,7 +1160,11 @@
    },
    "name": "파주",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 0.68,
+   "trade3mUnits": 268,
+   "tradeTrend": -1.17,
+   "tradeTrendUnits": 296
   },
   "uijeongbu": {
    "confirmed": 443,
@@ -1087,7 +1193,11 @@
    },
    "name": "의정부",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 0.79,
+   "trade3mUnits": 345,
+   "tradeTrend": 1.27,
+   "tradeTrendUnits": 393
   },
   "yangju": {
    "confirmed": 247,
@@ -1116,7 +1226,11 @@
    },
    "name": "양주",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 0.66,
+   "trade3mUnits": 187,
+   "tradeTrend": 0.07,
+   "tradeTrendUnits": 210
   },
   "siheung": {
    "confirmed": 484,
@@ -1145,7 +1259,11 @@
    },
    "name": "시흥",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 0.85,
+   "trade3mUnits": 379,
+   "tradeTrend": 0.07,
+   "tradeTrendUnits": 413
   },
   "ansan": {
    "confirmed": 319,
@@ -1174,7 +1292,11 @@
    },
    "name": "안산 (상록·단원)",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 0.81,
+   "trade3mUnits": 291,
+   "tradeTrend": 0.83,
+   "tradeTrendUnits": 326
   },
   "pyeongtaek": {
    "confirmed": 553,
@@ -1203,7 +1325,11 @@
    },
    "name": "평택",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 0.0,
+   "trade3mUnits": 432,
+   "tradeTrend": -0.76,
+   "tradeTrendUnits": 456
   },
   "gwangju-si": {
    "confirmed": 307,
@@ -1232,7 +1358,11 @@
    },
    "name": "광주시",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 1.93,
+   "trade3mUnits": 248,
+   "tradeTrend": 1.66,
+   "tradeTrendUnits": 275
   },
   "incheon-seo": {
    "confirmed": 471,
@@ -1279,7 +1409,11 @@
    "reorgBreak": false,
    "name": "인천 서구 (서해·검단)",
    "kind": "unregulated",
-   "target": false
+   "target": false,
+   "trade3m": 0.49,
+   "trade3mUnits": 419,
+   "tradeTrend": 0.0,
+   "tradeTrendUnits": 463
   }
  }
 }
