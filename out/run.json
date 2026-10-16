@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-16 12:52 KST",
+ "generatedAt": "2026-10-16 13:55 KST",
  "confirmedMonth": "2026-08",
  "provisionalMonth": "2026-09",
  "window": [
@@ -8,14 +8,11 @@
  ],
  "peaksSince": "2020-01",
  "peaksThrough": "2025-07",
- "calls": 4077,
+ "calls": 1223,
  "errors": [],
  "errorCount": 0,
- "rentStatus": "auth: 등록되지 않은 서비스키",
- "notes": [
-  "단지 식별 방식 변경으로 신고가 이력을 2020-01부터 다시 채움",
-  "전월세 API 인증 실패 — 공공데이터포털에서 「아파트 전월세 실거래가 자료」 활용신청·승인 여부를 확인하세요. 전세가율·월세 칸이 비어 있음"
- ],
+ "rentStatus": "ok",
+ "notes": [],
  "discovered": {
   "4159": {
    "checked": "202608",
@@ -173,6 +170,33 @@
    "slerGbn",
    "umdCd",
    "umdNm"
+  ],
+  "getRTMSDataSvcAptRent": [
+   "aptNm",
+   "aptSeq",
+   "buildYear",
+   "contractTerm",
+   "contractType",
+   "dealDay",
+   "dealMonth",
+   "dealYear",
+   "deposit",
+   "excluUseAr",
+   "floor",
+   "jibun",
+   "monthlyRent",
+   "preDeposit",
+   "preMonthlyRent",
+   "roadnm",
+   "roadnmbcd",
+   "roadnmbonbun",
+   "roadnmbubun",
+   "roadnmcd",
+   "roadnmseq",
+   "roadnmsggcd",
+   "sggCd",
+   "umdNm",
+   "useRRRight"
   ]
  },
  "countsBasis": "계약월 기준, 해제 신고 건 제외, 아파트 매매",
