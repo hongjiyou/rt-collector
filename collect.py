@@ -439,14 +439,27 @@ def main():
             rent_status = f"auth: {e}"
         except QuotaError:
             rent_status = "quota"
-    if rent_status.startswith("auth"):
-        notes.append("전월세 API 인증 실패 — 공공데이터포털에서 「아파트 전월세 실거래가 자료」 활용신청·승인 여부를 확인하세요. 전세가율·월세 칸이 비어 있음")
-    elif rent_status == "quota":
-        notes.append("전월세는 호출 한도로 이번에 수집하지 못함 — 전세가율·월세 칸이 비어 있음")
     rents = dedupe(rents)
-    latest_jeonse, latest_wolse = {}, {}
+    # 마지막으로 받은 전월세를 state/rents.json에 쌓아 두고, 못 받은 회차에는 그 값을 '기존'으로 쓴다
+    rent_cache = load_json(STATE / "rents.json", {"jeonse": {}, "wolse": {}})
     for r in sorted(rents, key=lambda x: x["date"]):
-        (latest_jeonse if r["monthly"] == 0 else latest_wolse)[unit_key(r)] = r
+        kind = "jeonse" if r["monthly"] == 0 else "wolse"
+        k = unit_key(r)
+        old = rent_cache[kind].get(k)
+        if not old or r["date"] >= old["date"]:
+            rent_cache[kind][k] = {"deposit": r["deposit"], "monthly": r["monthly"], "date": r["date"]}
+    keep_from = (today - dt.timedelta(days=730)).isoformat()   # 2년 넘은 기록은 버린다
+    for kind in ("jeonse", "wolse"):
+        rent_cache[kind] = {k: v for k, v in rent_cache[kind].items() if v["date"] >= keep_from}
+    save_json(STATE / "rents.json", rent_cache)
+    rent_fresh = rent_status == "ok"
+    if not rent_fresh:
+        why = ("전월세 API 인증 실패 — 공공데이터포털에서 「아파트 전월세 실거래가 자료」 활용신청·승인 여부를 확인하세요"
+               if rent_status.startswith("auth") else "전월세는 호출 한도로 이번에 수집하지 못함")
+        fallback = ("전세가율·월세는 마지막으로 받은 값을 '기존'으로 표시" if rent_cache["jeonse"]
+                    else "아직 받은 적이 없어 전세가율·월세 칸이 비어 있음")
+        notes.append(f"{why}. {fallback}")
+    latest_jeonse, latest_wolse = rent_cache["jeonse"], rent_cache["wolse"]
 
     # 5) 거래량 집계
     reg_counts = defaultdict(lambda: defaultdict(lambda: {"new": 0, "legacy": 0}))   # region -> ym -> basis -> n
@@ -528,6 +541,7 @@ def main():
                     break
                 prev = x
             pk = peak_of(k)
+            rk = window_peaks.get(k)                 # 최근 15개월 최고가 (트리거 기준)
             j, w = latest_jeonse.get(k), latest_wolse.get(k)
             vs_prev = pct(r["price"], prev["price"]) if prev else None
             deals.append({
@@ -537,23 +551,30 @@ def main():
                 "complexTrades15m": cx_trades[r["cx"]],
                 "prevPrice": prev["price"] if prev else None, "prevDate": prev["date"] if prev else None,
                 "vsPrev": vs_prev,
+                "recentPeakPrice": rk["price"] if rk else None, "recentPeakDate": rk["date"] if rk else None,
+                "vsRecent": pct(r["price"], rk["price"]) if rk else None,
                 "peakPrice": pk["price"] if pk else None, "peakDate": pk["date"] if pk else None,
                 "vsPeak": pct(r["price"], pk["price"]) if pk else None,
                 "jeonse": j["deposit"] if j else None, "jeonseDate": j["date"] if j else None,
                 "jeonseRatio": round(j["deposit"] / r["price"] * 100, 1) if j else None,
+                "jeonseStale": bool(j) and not rent_fresh,
                 "monthly": f'{w["deposit"]}/{w["monthly"]}' if w else None,
+                "monthlyDate": w["date"] if w else None,
                 "check": vs_prev is not None and abs(vs_prev) >= OUTLIER_PREV,
             })
-    deals.sort(key=lambda d: (d["vsPeak"] if d["vsPeak"] is not None else 0, d["date"]))
+    deals.sort(key=lambda d: (d["vsRecent"] if d["vsRecent"] is not None else 0, d["date"]))
 
     deal_stats = {}
     for reg in regions:
         ds = [d for d in deals if d["regionId"] == reg.id and not d["check"]]
         deal_stats[reg.id] = {
             "name": reg.name, "target": reg.target, "n": len(ds),
+            "vsRecentMedian": median(d["vsRecent"] for d in ds),
+            "fallOver15": sum(1 for d in ds if d["vsRecent"] is not None and d["vsRecent"] <= TARGET_FALL),
             "vsPeakMedian": median(d["vsPeak"] for d in ds),
-            "fallOver15": sum(1 for d in ds if d["vsPeak"] is not None and d["vsPeak"] <= TARGET_FALL),
+            "fallOver15AllTime": sum(1 for d in ds if d["vsPeak"] is not None and d["vsPeak"] <= TARGET_FALL),
             "jeonseRatioMedian": median(d["jeonseRatio"] for d in ds),
+            "jeonseStale": not rent_fresh,
         }
 
     # 7) 저장
@@ -615,21 +636,26 @@ def render_summary(meta, macro, regions, deals, stats):
                  f"{_p(s['yoy'])}{flag}{brk} | {_n(s['provisional'])} |")
     L += ["", "⚠ 전년 동월 대비 30% 이상 감소 · † 행정구역 개편 전후 비교(참고용) · ● 목표 지역(규제지역·지정 임박 후보)", "",
           "## 지역별 실거래 요약", "",
-          f"조건: {meta['dealFilter']}. '확인' 표시 거래(직전 대비 ±30% 이상)는 중앙값에서 뺌.", "",
-          "| id | 지역 | 목표 | 건수 | 신고가대비 중앙값 | -15% 이상 하락 건수 | 전세가율 중앙값 |",
-          "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
+          f"조건: {meta['dealFilter']}. '확인' 표시 거래(직전 대비 ±30% 이상)는 중앙값에서 뺌. "
+          "최근최고 = 최근 15개월 최고가(트리거 기준), 역대최고 = 2020년 이후 최고가(참고).", "",
+          "| id | 지역 | 목표 | 건수 | 최근최고 대비 중앙값 | 최근최고 대비 -15% 이상 건수 | 역대최고 대비 중앙값 | 전세가율 중앙값 |",
+          "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |"]
     for rid, s in stats.items():
-        jr = "—" if s["jeonseRatioMedian"] is None else f"{s['jeonseRatioMedian']}%"
-        L.append(f"| {rid} | {s['name']} | {'●' if s['target'] else ''} | {s['n']:,} | {_p(s['vsPeakMedian'])} | {s['fallOver15']:,} | {jr} |")
+        jr = "—" if s["jeonseRatioMedian"] is None else f"{s['jeonseRatioMedian']}%" + (" (기존)" if s["jeonseStale"] else "")
+        L.append(f"| {rid} | {s['name']} | {'●' if s['target'] else ''} | {s['n']:,} | {_p(s['vsRecentMedian'])} | "
+                 f"{s['fallOver15']:,} | {_p(s['vsPeakMedian'])} | {jr} |")
     tdeals = [d for d in deals if d["target"]]
-    L += ["", f"## 목표 지역 실거래 — 신고가 대비 하락 큰 순 {min(len(tdeals), SUMMARY_DEALS)}건 (목표 지역 전체 {len(tdeals):,}건)", "",
-          "| 지역 | 단지 | 전용㎡ | 가격(만원) | 계약일 | 유형 | 직전대비 | 신고가(만원) | 신고가일 | 신고가대비 | 전세가율 | 월세(보증금/월) | 비고 |",
-          "| --- | --- | ---: | ---: | --- | --- | ---: | ---: | --- | ---: | ---: | --- | --- |"]
+    L += ["", f"## 목표 지역 실거래 — 최근 15개월 최고가 대비 하락 큰 순 {min(len(tdeals), SUMMARY_DEALS)}건 (목표 지역 전체 {len(tdeals):,}건)", "",
+          "| 지역 | 단지 | 전용㎡ | 가격(만원) | 계약일 | 유형 | 직전대비 | 최근최고(만원) | 최근최고 대비 | 역대최고(만원) | 역대최고 대비 | 전세가율 | 월세(보증금/월) | 비고 |",
+          "| --- | --- | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |"]
     for d in tdeals[:SUMMARY_DEALS]:
-        jr = "—" if d["jeonseRatio"] is None else f"{d['jeonseRatio']}%"
+        if d["jeonseRatio"] is None:
+            jr = "—"
+        else:
+            jr = f"{d['jeonseRatio']}%" + (f" (기존 {d['jeonseDate'][:7]})" if d["jeonseStale"] else "")
         L.append(f"| {d['region']} | {d['complex']} ({d['umd']}) | {d['area']} | {d['price']:,} | {d['date']} | {d['type']} | "
-                 f"{_p(d['vsPrev'])} | {_n(d['peakPrice'])} | {d['peakDate'] or '—'} | {_p(d['vsPeak'])} | {jr} | "
-                 f"{d['monthly'] or '—'} | {'확인' if d['check'] else ''} |")
+                 f"{_p(d['vsPrev'])} | {_n(d['recentPeakPrice'])} | {_p(d['vsRecent'])} | {_n(d['peakPrice'])} | {_p(d['vsPeak'])} | "
+                 f"{jr} | {d['monthly'] or '—'} | {'확인' if d['check'] else ''} |")
     breaks = [(rid, s) for rid, s in regions.items() if "basis" in s]
     if breaks:
         L += ["", "## 개편 지역 집계 기준", ""]
