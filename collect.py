@@ -44,7 +44,8 @@ OUTLIER_PREV = 30.0     # 직전 거래 대비 ±30% 이상이면 '확인' 표�
 TARGET_FALL = -15.0     # 신고가 대비 하락 트리거 기준
 SUMMARY_DEALS = 60      # summary.md에 싣는 실거래 최대 건수
 REPORT_LAG_DAYS = 30    # 실거래 신고기한
-PEAK_KEY_VERSION = 2    # 단지 식별 방식을 바꾸면 올린다 (이력 자동 재수집)
+PEAK_KEY_VERSION = 3    # 단지 식별 방식을 바꾸면 올린다 (이력 자동 재수집)
+MIN_UNITS = 10          # 실거래 변동률을 낼 때 필요한 최소 비교 단지·평형 수
 
 
 class QuotaError(Exception):
@@ -181,9 +182,10 @@ def _area(it):
         return None
 
 
-def complex_key(apt, jibun):
-    """시군구 코드·법정동 이름과 무관한 단지 식별자. 행정구역 개편 전후에도 같은 단지로 이어진다."""
-    return f"{apt}|{jibun}"
+def complex_key(apt, jibun, built):
+    """시군구 코드·법정동 이름과 무관한 단지 식별자(단지명+지번+준공연도).
+    행정구역 개편 전후에도 같은 단지로 이어지고, 이름·지번이 같은 다른 단지와는 준공연도로 갈린다."""
+    return f"{apt}|{jibun}|{built}"
 
 
 def norm_trade(it, code):
@@ -194,7 +196,7 @@ def norm_trade(it, code):
     typ = "중개" if "중개" in gbn else ("직거래" if "직" in gbn else "미확인")
     apt, jibun = it.get("aptNm", ""), it.get("jibun", "")
     return {
-        "cx": complex_key(apt, jibun), "apt": apt, "umd": it.get("umdNm", ""),
+        "cx": complex_key(apt, jibun, it.get("buildYear", "")), "apt": apt, "umd": it.get("umdNm", ""),
         "code": code, "area": area, "price": price, "date": date,
         "floor": it.get("floor", ""), "type": typ,
         "cancelled": it.get("cdealType", "").upper() == "O",
@@ -206,7 +208,7 @@ def norm_rent(it, code):
     if dep is None or mon is None or date is None or area is None:
         return None
     apt, jibun = it.get("aptNm", ""), it.get("jibun", "")
-    return {"cx": complex_key(apt, jibun), "apt": apt, "umd": it.get("umdNm", ""), "area": area,
+    return {"cx": complex_key(apt, jibun, it.get("buildYear", "")), "apt": apt, "umd": it.get("umdNm", ""), "area": area,
             "deposit": dep, "monthly": mon, "date": date, "floor": it.get("floor", "")}
 
 
@@ -441,7 +443,9 @@ def main():
             rent_status = "quota"
     rents = dedupe(rents)
     # 마지막으로 받은 전월세를 state/rents.json에 쌓아 두고, 못 받은 회차에는 그 값을 '기존'으로 쓴다
-    rent_cache = load_json(STATE / "rents.json", {"jeonse": {}, "wolse": {}})
+    rent_cache = load_json(STATE / "rents.json", {})
+    if rent_cache.get("keyVersion") != PEAK_KEY_VERSION:     # 단지 식별 방식이 바뀌면 캐시를 새로 쌓는다
+        rent_cache = {"keyVersion": PEAK_KEY_VERSION, "jeonse": {}, "wolse": {}}
     for r in sorted(rents, key=lambda x: x["date"]):
         kind = "jeonse" if r["monthly"] == 0 else "wolse"
         k = unit_key(r)
@@ -504,10 +508,40 @@ def main():
     macro = {name: series(lambda ym, cs=codes: metro_total(cs, ym), needed) for name, codes in metro.items()}
     macro["capital"] = series(lambda ym: metro_total(all_codes, ym), needed)
 
+    # 실거래 변동률: 같은 단지·평형의 거래가 중앙값을 두 기간 사이에서 비교하고, 그 변화율들의 중앙값을 낸다
+    #   trade3m    최근 3개월(확정월 포함) vs 그 직전 3개월  → 부동산원 '3개월 상승률' 자리를 채우는 실거래 기준 값
+    #   tradeTrend 최근 3개월 vs 6~12개월 전               → 추세가 꺾였는지(진입 검토 트리거 후보)
+    def ym_of(r):
+        return r["date"][:4] + r["date"][5:7]
+
+    recent = set(ym_range(ym_add(conf, -2), conf))
+    prev3 = set(ym_range(ym_add(conf, -5), ym_add(conf, -3)))
+    base612 = set(ym_range(ym_add(conf, -11), ym_add(conf, -6)))
+
+    def unit_change(rows, a, b):
+        by = defaultdict(lambda: ([], []))
+        for r in rows:
+            m = ym_of(r)
+            if m in a:
+                by[unit_key(r)][0].append(r["price"])
+            elif m in b:
+                by[unit_key(r)][1].append(r["price"])
+        ch = [statistics.median(x) / statistics.median(y) - 1 for x, y in by.values() if x and y]
+        if len(ch) < MIN_UNITS:
+            return None, len(ch)
+        return round(statistics.median(ch) * 100, 2), len(ch)
+
+    def trade_change(reg):
+        rows = [r for r in trades if not r["cancelled"] and r["type"] != "직거래" and reg.has(r)]
+        t3, n3 = unit_change(rows, recent, prev3)
+        tt, nt = unit_change(rows, recent, base612)
+        return {"trade3m": t3, "trade3mUnits": n3, "tradeTrend": tt, "tradeTrendUnits": nt}
+
     regions_out = {}
     for reg in regions:
         s = series(lambda ym, rg=reg: region_total(rg, ym), window, reg)
         s.update({"name": reg.name, "kind": reg.kind, "target": reg.target})
+        s.update(trade_change(reg))
         regions_out[reg.id] = s
 
     # 6) 조건에 맞는 실거래
@@ -627,14 +661,16 @@ def render_summary(meta, macro, regions, deals, stats):
         s = macro[k]
         L.append(f"| {label} | {_n(s['confirmed'])} | {_p(s['mom'])} | {_p(s['yoy'])} | {_n(s['provisional'])} | {_n(s['provisionalYearAgo'])} |")
     L += ["", "## 감시 지역 거래량", "",
-          f"| id | 지역 | 목표 | {c} | 전월비 | 전년동월비 | {p} 잠정 |",
-          "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
+          f"| id | 지역 | 목표 | {c} | 전월비 | 전년동월비 | {p} 잠정 | 실거래 3개월 | 실거래 추세(6~12개월 전 대비) |",
+          "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for rid, s in regions.items():
         flag = " ⚠" if s["yoy"] is not None and s["yoy"] <= -30 else ""
         brk = " †" if s.get("reorgBreak") else ""
         L.append(f"| {rid} | {s['name']} | {'●' if s['target'] else ''} | {_n(s['confirmed'])} | {_p(s['mom'])} | "
-                 f"{_p(s['yoy'])}{flag}{brk} | {_n(s['provisional'])} |")
-    L += ["", "⚠ 전년 동월 대비 30% 이상 감소 · † 행정구역 개편 전후 비교(참고용) · ● 목표 지역(규제지역·지정 임박 후보)", "",
+                 f"{_p(s['yoy'])}{flag}{brk} | {_n(s['provisional'])} | {_p(s.get('trade3m'))} | {_p(s.get('tradeTrend'))} |")
+    L += ["", "⚠ 전년 동월 대비 30% 이상 감소 · † 행정구역 개편 전후 비교(참고용) · ● 목표 지역(규제지역·지정 임박 후보)",
+          f"실거래 3개월 = 같은 단지·평형의 최근 3개월({c}까지) 거래가 중앙값을 직전 3개월과 비교한 변화율의 중앙값. "
+          f"실거래 추세 = 최근 3개월을 6~12개월 전과 비교. 비교 가능한 단지·평형이 {MIN_UNITS}개 미만이면 —.", "",
           "## 지역별 실거래 요약", "",
           f"조건: {meta['dealFilter']}. '확인' 표시 거래(직전 대비 ±30% 이상)는 중앙값에서 뺌. "
           "최근최고 = 최근 15개월 최고가(트리거 기준), 역대최고 = 2020년 이후 최고가(참고).", "",
