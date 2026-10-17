@@ -48,6 +48,8 @@ SUMMARY_DEALS = 60      # summary.md에 싣는 실거래 최대 건수
 REPORT_LAG_DAYS = 30    # 실거래 신고기한
 PEAK_KEY_VERSION = 3    # 단지 식별 방식을 바꾸면 올린다 (이력 자동 재수집)
 MIN_UNITS = 10          # 실거래 변동률을 낼 때 필요한 최소 비교 단지·평형 수
+VOL3M_ALERT = -20       # 거래량 3개월 비교 경보 기준(%)
+PRICE_MIN_UNITS = 8     # 가격 추이 한 달 값을 내는 최소 비교 평형 수
 
 
 class QuotaError(Exception):
@@ -336,12 +338,13 @@ def main():
     all_codes = sorted({c for v in metro.values() for c in v})
     watched_codes = sorted({c for r in regions for c in r.all_codes})
 
-    # 2) 매매. 감시 지역은 15개월 전부, 나머지 수도권 코드는 거래량 비교에 필요한 달만.
-    needed = sorted({conf, ym_add(conf, -1), ym_add(conf, -12), prov, ym_add(prov, -12)} & set(window))
+    # 2) 매매. 수도권 전 코드 15개월(권역 거래량 추이·3개월 비교용). 감시 지역은 거래 원장도 보관.
+    needed = [ym for ym in window if ym <= prov]
     plan = [(c, ym) for c in watched_codes for ym in window]
     plan += [(c, ym) for c in all_codes if c not in watched_codes for ym in needed]
 
     counts = defaultdict(lambda: defaultdict(int))          # code -> ym -> n
+    price_rows = defaultdict(list)                          # code -> [(unit, ym, price)] 가격 추이용(직거래·해제 제외)
     trades = []                                             # 감시 지역 거래 원장
     missing = set()                                         # 받지 못한 (code, ym)
     seen_by_ym = defaultdict(set)
@@ -362,6 +365,8 @@ def main():
         for r in rows:
             if not r["cancelled"]:
                 counts[code][ym] += 1
+                if r["type"] != "직거래":
+                    price_rows[code].append((unit_key(r), r["date"][:4] + r["date"][5:7], r["price"]))
         if code in watched_codes:
             trades.extend(rows)
 
@@ -497,9 +502,20 @@ def main():
             return "new"
         return "legacy" if b["legacy"] and not b["new"] else ("new" if b["new"] and not b["legacy"] else "mixed")
 
+    def sum3(get, end):
+        vals = [get(ym_add(end, -i)) for i in range(3)]
+        return None if any(v is None for v in vals) else sum(vals)
+
     def series(get, months, reg=None):
         c0, cm1, cy1, p0 = get(conf), get(ym_add(conf, -1)), get(ym_add(conf, -12)), get(prov)
+        v3, v3p = sum3(get, conf), sum3(get, ym_add(conf, -3))
+        hist_months = [ym for ym in months if ym <= prov]
         s = {"confirmed": c0, "prev": cm1, "yearAgo": cy1, "mom": pct(c0, cm1), "yoy": pct(c0, cy1),
+             # 최근 3개월(확정월까지) 거래 건수 합 vs 그 직전 3개월 합
+             "vol3m": v3, "vol3mPrev": v3p, "vol3mChg": pct(v3, v3p),
+             # 월별 건수 추이: "시작월|n,n,...,n" (마지막 값은 잠정월, 받지 못한 달은 빈칸)
+             "volHist": fmt_ym(hist_months[0]) + "|" + ",".join(
+                 "" if get(ym) is None else str(get(ym)) for ym in hist_months) if hist_months else None,
              "provisional": p0, "provisionalYearAgo": get(ym_add(prov, -12)),
              "byMonth": {fmt_ym(ym): get(ym) for ym in months}}
         if reg is not None and reg.legacy_code:
@@ -507,8 +523,31 @@ def main():
             s["reorgBreak"] = basis(reg, conf) != basis(reg, ym_add(conf, -12))
         return s
 
+    # 가격 추이: 같은 단지·평형의 월 중앙가를 그 평형의 15개월 중앙가로 나눈 비율의 중앙값을 월별로 잇고,
+    # 첫 값을 100으로 맞춘다. "시작월|v,v,…" (마지막 값은 잠정월, 비교 평형이 부족한 달은 빈칸)
+    def price_hist(rows, months):
+        by = defaultdict(lambda: defaultdict(list))
+        for u, ym, pr in rows:
+            if ym <= prov:
+                by[u][ym].append(pr)
+        ratios = defaultdict(list)
+        for u, mm in by.items():
+            allp = [x for v in mm.values() for x in v]
+            if len(allp) < 3:
+                continue
+            base = statistics.median(allp)
+            for ym, v in mm.items():
+                ratios[ym].append(statistics.median(v) / base)
+        vals = [statistics.median(ratios[ym]) if len(ratios[ym]) >= PRICE_MIN_UNITS else None for ym in months]
+        first = next((v for v in vals if v), None)
+        if not first:
+            return None
+        return fmt_ym(months[0]) + "|" + ",".join("" if v is None else f"{v / first * 100:.1f}" for v in vals)
+
     macro = {name: series(lambda ym, cs=codes: metro_total(cs, ym), needed) for name, codes in metro.items()}
     macro["capital"] = series(lambda ym: metro_total(all_codes, ym), needed)
+    for name, codes in list(metro.items()) + [("capital", all_codes)]:
+        macro[name]["priceHist"] = price_hist([x for c in codes for x in price_rows[c]], needed)
 
     # 실거래 변동률: 같은 단지·평형의 거래가 중앙값을 두 기간 사이에서 비교하고, 그 변화율들의 중앙값을 낸다
     #   trade3m    최근 3개월(확정월 포함) vs 그 직전 3개월  → 부동산원 '3개월 상승률' 자리를 채우는 실거래 기준 값
@@ -544,6 +583,8 @@ def main():
         s = series(lambda ym, rg=reg: region_total(rg, ym), window, reg)
         s.update({"name": reg.name, "kind": reg.kind, "target": reg.target})
         s.update(trade_change(reg))
+        s["priceHist"] = price_hist([(unit_key(r), ym_of(r), r["price"]) for r in trades
+                                     if not r["cancelled"] and r["type"] != "직거래" and reg.has(r)], needed)
         regions_out[reg.id] = s
 
     # 6) 조건에 맞는 실거래
@@ -569,6 +610,15 @@ def main():
         for i in range(1, MEDIAN_MONTHS + 1):
             prices.extend(unit_month_prices[k].get(ym_add(deal_ym, -i), []))
         return statistics.median(prices) if len(prices) >= 2 else None
+
+    def hist_of(k):
+        """'시작월|월순번:최저/중앙/최고|…' (억 단위). 거래 없는 달은 생략."""
+        parts = []
+        for i, ym in enumerate(window):
+            ps = unit_month_prices[k].get(ym)
+            if ps:
+                parts.append(f"{i}:{min(ps) / 1e4:.2f}/{statistics.median(ps) / 1e4:.2f}/{max(ps) / 1e4:.2f}")
+        return fmt_ym(window[0]) + "|" + "|".join(parts)
 
     cutoff = (today - dt.timedelta(days=DEAL_DAYS)).isoformat()
     deals, seen = [], set()
@@ -618,6 +668,7 @@ def main():
                 "monthly": f'{w["deposit"]}/{w["monthly"]}' if w else None,
                 "monthlyDate": w["date"] if w else None,
                 "check": bool(reasons), "checkReason": ", ".join(reasons) or None,
+                "hist": hist_of(k) if reg.target else None,
             })
     # 정렬: 직전 6개월 같은 평형 중앙가 대비 많이 싼 순 (비교 불가 거래는 뒤로)
     deals.sort(key=lambda d: (d["vsMedian"] is None, d["vsMedian"] if d["vsMedian"] is not None else 0, d["date"]))
@@ -652,12 +703,28 @@ def main():
     save_json(OUT / "volume.json", {"meta": meta, "macro": macro, "regions": regions_out})
     save_json(OUT / "deals.json", {"meta": meta, "count": len(deals), "stats": deal_stats, "deals": deals})
     (OUT / "summary.md").write_text(render_summary(meta, macro, regions_out, deals, deal_stats), encoding="utf-8")
+    top = [d for d in deals if d["target"] and not d["check"]][:SUMMARY_DEALS]
+    lines = ["순위,단지,전용,가격만원,계약일,추이"]
+    for i, d in enumerate(top, 1):
+        lines.append(f'{i},"{d["complex"]}",{d["area"]},{d["price"]},{d["date"]},{d["hist"]}')
+    (OUT / "deal_hist.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    vl = ["키,이름,확정월,3개월합,직전3개월합,3개월비교,전년동월비,추이,가격추이"]
+    for k, label in [("capital", "수도권"), ("seoul", "서울"), ("gyeonggi", "경기"), ("incheon", "인천")]:
+        m = macro[k]
+        vl.append(f'{k},{label},{_v(m["confirmed"])},{_v(m["vol3m"])},{_v(m["vol3mPrev"])},{_v(m["vol3mChg"])},{_v(m["yoy"])},{m["volHist"] or ""},{m.get("priceHist") or ""}')
+    for rid, r in regions_out.items():
+        vl.append(f'{rid},"{r["name"]}",{_v(r["confirmed"])},{_v(r["vol3m"])},{_v(r["vol3mPrev"])},{_v(r["vol3mChg"])},{_v(r["yoy"])},{r["volHist"] or ""},{r.get("priceHist") or ""}')
+    (OUT / "vol_hist.csv").write_text("\n".join(vl) + "\n", encoding="utf-8")
     print(f"완료: 호출 {client.calls}건, 오류 {len(client.errors)}건, 실거래 {len(deals)}건, 전월세 {rent_status}")
     for n in notes:
         print("메모:", n)
 
 
 # ---------------------------------------------------------------- 요약 문서
+
+def _v(v):
+    return "" if v is None else str(v)
+
 
 def _p(v):
     return "—" if v is None else f"{v:+.1f}%"
@@ -680,20 +747,20 @@ def render_summary(meta, macro, regions, deals, stats):
     if meta["notes"]:
         L.append("")
     L += ["## 권역 거래량", "",
-          f"| 권역 | {c} | 전월비 | 전년동월비 | {p} 잠정 | 전년 {p[5:]}월 |",
-          "| --- | ---: | ---: | ---: | ---: | ---: |"]
+          f"| 권역 | {c} | 3개월 합 | 직전 3개월 | 3개월 비교 | 전월비 | 전년동월비 | {p} 잠정 | 전년 {p[5:]}월 |",
+          "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for k, label in [("capital", "수도권"), ("seoul", "서울"), ("gyeonggi", "경기"), ("incheon", "인천")]:
         s = macro[k]
-        L.append(f"| {label} | {_n(s['confirmed'])} | {_p(s['mom'])} | {_p(s['yoy'])} | {_n(s['provisional'])} | {_n(s['provisionalYearAgo'])} |")
+        L.append(f"| {label} | {_n(s['confirmed'])} | {_n(s['vol3m'])} | {_n(s['vol3mPrev'])} | {_p(s['vol3mChg'])} | {_p(s['mom'])} | {_p(s['yoy'])} | {_n(s['provisional'])} | {_n(s['provisionalYearAgo'])} |")
     L += ["", "## 감시 지역 거래량", "",
-          f"| id | 지역 | 목표 | {c} | 전월비 | 전년동월비 | {p} 잠정 | 실거래 3개월 | 실거래 추세(6~12개월 전 대비) |",
-          "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
+          f"| id | 지역 | 목표 | {c} | 3개월 비교 | 전월비 | 전년동월비 | {p} 잠정 | 실거래 3개월 | 실거래 추세(6~12개월 전 대비) |",
+          "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for rid, s in regions.items():
-        flag = " ⚠" if s["yoy"] is not None and s["yoy"] <= -30 else ""
+        flag = " ⚠" if s["vol3mChg"] is not None and s["vol3mChg"] <= VOL3M_ALERT else ""
         brk = " †" if s.get("reorgBreak") else ""
-        L.append(f"| {rid} | {s['name']} | {'●' if s['target'] else ''} | {_n(s['confirmed'])} | {_p(s['mom'])} | "
-                 f"{_p(s['yoy'])}{flag}{brk} | {_n(s['provisional'])} | {_p(s.get('trade3m'))} | {_p(s.get('tradeTrend'))} |")
-    L += ["", "⚠ 전년 동월 대비 30% 이상 감소 · † 행정구역 개편 전후 비교(참고용) · ● 목표 지역(규제지역·지정 임박 후보)",
+        L.append(f"| {rid} | {s['name']} | {'●' if s['target'] else ''} | {_n(s['confirmed'])} | {_p(s['vol3mChg'])}{flag} | {_p(s['mom'])} | "
+                 f"{_p(s['yoy'])}{brk} | {_n(s['provisional'])} | {_p(s.get('trade3m'))} | {_p(s.get('tradeTrend'))} |")
+    L += ["", f"⚠ 최근 3개월 거래가 직전 3개월보다 {-VOL3M_ALERT}% 이상 감소 · † 행정구역 개편 전후 비교(참고용) · ● 목표 지역(규제지역·지정 임박 후보)",
           f"실거래 3개월 = 같은 단지·평형의 최근 3개월({c}까지) 거래가 중앙값을 직전 3개월과 비교한 변화율의 중앙값. "
           f"실거래 추세 = 최근 3개월을 6~12개월 전과 비교. 비교 가능한 단지·평형이 {MIN_UNITS}개 미만이면 —.", "",
           "## 지역별 실거래 요약", "",
