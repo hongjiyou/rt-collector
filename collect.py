@@ -16,6 +16,7 @@
 import datetime as dt
 import json
 import os
+import math
 import statistics
 import sys
 import time
@@ -538,7 +539,13 @@ def main():
             base = statistics.median(allp)
             for ym, v in mm.items():
                 ratios[ym].append(statistics.median(v) / base)
-        vals = [statistics.median(ratios[ym]) if len(ratios[ym]) >= PRICE_MIN_UNITS else None for ym in months]
+        def trimmed_mean(xs):
+            # 중앙값은 한 달 한 건뿐인 평형이 많을 때 정확히 1.0에 붙어 추이가 평평해지므로, 양끝 10%를 버린 평균을 쓴다
+            xs = sorted(math.log(x) for x in xs)
+            k = len(xs) // 10
+            xs = xs[k:len(xs) - k] or xs
+            return math.exp(sum(xs) / len(xs))
+        vals = [trimmed_mean(ratios[ym]) if len(ratios[ym]) >= PRICE_MIN_UNITS else None for ym in months]
         first = next((v for v in vals if v), None)
         if not first:
             return None
@@ -612,13 +619,14 @@ def main():
         return statistics.median(prices) if len(prices) >= 2 else None
 
     def hist_of(k):
-        """'시작월|월순번:최저/중앙/최고|…' (억 단위). 거래 없는 달은 생략."""
+        """같은 단지·평형의 15개월 거래 전부: '시작월|월순번.일:가격;…' (억 단위, 직거래 제외)."""
+        idx = {ym: n for n, ym in enumerate(window)}
         parts = []
-        for i, ym in enumerate(window):
-            ps = unit_month_prices[k].get(ym)
-            if ps:
-                parts.append(f"{i}:{min(ps) / 1e4:.2f}/{statistics.median(ps) / 1e4:.2f}/{max(ps) / 1e4:.2f}")
-        return fmt_ym(window[0]) + "|" + "|".join(parts)
+        for x in by_unit.get(k, []):
+            ym = x["date"][:4] + x["date"][5:7]
+            if ym in idx:
+                parts.append(f'{idx[ym]}.{x["date"][8:10]}:{x["price"] / 1e4:.2f}')
+        return fmt_ym(window[0]) + "|" + ";".join(parts)
 
     cutoff = (today - dt.timedelta(days=DEAL_DAYS)).isoformat()
     deals, seen = [], set()
