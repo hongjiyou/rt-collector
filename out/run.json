@@ -1,14 +1,14 @@
 {
- "generatedAt": "2026-10-31 05:25 KST",
+ "generatedAt": "2026-11-01 05:19 KST",
  "confirmedMonth": "2026-09",
  "provisionalMonth": "2026-10",
  "window": [
-  "2025-08",
-  "2026-10"
+  "2025-09",
+  "2026-11"
  ],
  "peaksSince": "2020-01",
- "peaksThrough": "2025-07",
- "calls": 1639,
+ "peaksThrough": "2025-08",
+ "calls": 1634,
  "errors": [],
  "errorCount": 0,
  "rentStatus": "ok",
